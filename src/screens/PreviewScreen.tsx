@@ -5,7 +5,7 @@ import { SectionCard } from '../components/SectionCard';
 import { StepIntro } from '../components/StepIntro';
 import { COMPANY, TECHNICIAN, UF } from '../constants';
 import { useReport } from '../context/ReportContext';
-import { generateReportFile, shareReportFile, shareXlsFile } from '../services/reportFileService';
+import { generateReportFile, shareXlsFile } from '../services/reportFileService';
 import { convertXlsxFileToXls } from '../services/xlsConverterService';
 import { colors, radius, spacing } from '../theme';
 import { reportFilenameXls } from '../utils/filename';
@@ -21,24 +21,10 @@ function SummaryRow({ label, value }: { label: string; value: string }): React.J
 
 export function PreviewScreen(): React.JSX.Element {
   const { draft } = useReport();
-  const [exporting, setExporting] = useState(false);
   const [convertingToXls, setConvertingToXls] = useState(false);
   const a = draft.activation;
   const generalCount = draft.generalPhotos.filter((item) => item.photo).length;
   const equipmentCount = draft.equipment.filter((item) => item.description || item.identifier || item.photo).length;
-
-  async function exportReport(): Promise<void> {
-    try {
-      setExporting(true);
-      const fileUri = await generateReportFile(draft);
-      const shared = await shareReportFile(fileUri);
-      if (!shared) Alert.alert('Relatório gerado', `Arquivo salvo em:\n${fileUri}`);
-    } catch (error) {
-      Alert.alert('Não foi possível gerar o relatório', error instanceof Error ? error.message : 'Tente novamente.');
-    } finally {
-      setExporting(false);
-    }
-  }
 
   async function exportReportAsXls(): Promise<void> {
     try {
@@ -59,7 +45,7 @@ export function PreviewScreen(): React.JSX.Element {
 
   return (
     <>
-      <StepIntro title="Pré-visualização" description="Confira os dados antes de gerar o XLSX oficial com as fotos incorporadas." />
+      <StepIntro title="Pré-visualização" description="Confira os dados antes de gerar o arquivo .XLS oficial com as fotos incorporadas." />
       <SectionCard title="Dados do cliente e da ativação">
         <SummaryRow label="Cliente" value={a.client} />
         <SummaryRow label="Item WF / Cód. Cir" value={`${a.itemWf || '—'} / ${a.circuitCode || '—'}`} />
@@ -105,19 +91,14 @@ export function PreviewScreen(): React.JSX.Element {
         {draft.materials.map((item) => <SummaryRow key={item.id} label={item.description} value={String(item.quantity)} />)}
       </SectionCard>
 
-      <Pressable disabled={exporting || convertingToXls} onPress={() => void exportReport()} style={({ pressed }) => [styles.exportButton, pressed && styles.pressed, (exporting || convertingToXls) && styles.disabled]}>
-        {exporting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.exportText}>Gerar e compartilhar XLSX</Text>}
-      </Pressable>
-      <Text style={styles.exportHelp}>O arquivo mantém as quatro abas do modelo oficial e funciona sem servidor.</Text>
-
       <Pressable
-        disabled={exporting || convertingToXls}
+        disabled={convertingToXls}
         onPress={() => void exportReportAsXls()}
-        style={({ pressed }) => [styles.xlsButton, pressed && styles.pressed, (exporting || convertingToXls) && styles.disabled]}
+        style={({ pressed }) => [styles.exportButton, pressed && styles.pressed, convertingToXls && styles.disabled]}
       >
-        {convertingToXls ? <ActivityIndicator color={colors.red} /> : <Text style={styles.xlsText}>Converter e compartilhar .XLS</Text>}
+        {convertingToXls ? <ActivityIndicator color={colors.white} /> : <Text style={styles.exportText}>Baixar em .XLS</Text>}
       </Pressable>
-      <Text style={styles.exportHelp}>Envia o XLSX ao servidor de conversão (LibreOffice) e mantém fotos e formatação. Requer internet.</Text>
+      <Text style={styles.exportHelp}>Envia o arquivo ao servidor de conversão (LibreOffice) e mantém fotos e formatação. Requer internet.</Text>
     </>
   );
 }
@@ -138,8 +119,6 @@ const styles = StyleSheet.create({
   rvoPreview: { alignItems: 'center', aspectRatio: 12.6 / 14.45, backgroundColor: '#EDF1F6', borderRadius: radius.md, justifyContent: 'center', maxHeight: 420, overflow: 'hidden', width: '100%' },
   exportButton: { alignItems: 'center', backgroundColor: colors.red, borderRadius: radius.md, justifyContent: 'center', minHeight: 54, paddingHorizontal: spacing.xl },
   exportText: { color: colors.white, fontSize: 16, fontWeight: '800' },
-  xlsButton: { alignItems: 'center', backgroundColor: colors.white, borderColor: colors.red, borderRadius: radius.md, borderWidth: 1.5, justifyContent: 'center', minHeight: 54, marginTop: spacing.md, paddingHorizontal: spacing.xl },
-  xlsText: { color: colors.red, fontSize: 16, fontWeight: '800' },
   exportHelp: { color: colors.muted, fontSize: 12, lineHeight: 17, marginBottom: spacing.xl, marginTop: spacing.sm, textAlign: 'center' },
   pressed: { opacity: 0.72 },
   disabled: { opacity: 0.55 },

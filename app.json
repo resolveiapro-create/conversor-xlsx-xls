@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "R2 PRO",
+    "slug": "r2-pro-mobile",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "assets/**/*"
+    ],
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O R2 PRO usa suas fotos para montar o relatório de ativação.",
+          "cameraPermission": "O R2 PRO usa a câmera para registrar a instalação e os equipamentos."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ]
+    ],
+    "android": {
+      "package": "app.lovable.r2pro.mobile",
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "permissions": [
+        "CAMERA"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "app.lovable.r2pro.mobile",
+      "supportsTablet": true
+    }
+  }
+}

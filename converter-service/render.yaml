@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: r2pro-xls-converter
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: SOFFICE_BIN
+        value: soffice

@@ -175,35 +175,70 @@ function convertXlsxToXls(inputFilePath: string, outputDirectory: string): Promi
       outputDirectory,
     ];
 
-    execFile('soffice', args, { timeout: 120000 }, (error, stdout, stderr) => {
-      // Clean up temp profile
-      try {
-        fs.rmSync(uniqueProfileDir, { recursive: true, force: true });
-      } catch {
-        // ignore profile cleanup error
-      }
+    console.log(`[LibreOffice] Iniciando conversão de ${path.basename(inputFilePath)}...`);
+    const startedAt = Date.now();
 
-      if (error) {
-        console.error('LibreOffice conversion error:', error, stderr);
-        return reject(new Error(`Falha na conversão: ${error.message}. ${stderr || ''}`));
-      }
+    const child = execFile(
+      'soffice',
+      args,
+      {
+        timeout: 90000,
+        killSignal: 'SIGTERM',
+        // HOME explícito evita que o LibreOffice tente escrever configs fora
+        // do diretório de perfil isolado (causa comum de travamento silencioso
+        // em containers, quando $HOME não existe ou não é gravável).
+        env: { ...process.env, HOME: uniqueProfileDir },
+      },
+      (error, stdout, stderr) => {
+        clearTimeout(hardKillTimer);
+        const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
 
-      const baseName = path.basename(inputFilePath, path.extname(inputFilePath));
-      const expectedOutPath = path.join(outputDirectory, `${baseName}.xls`);
+        // Clean up temp profile
+        try {
+          fs.rmSync(uniqueProfileDir, { recursive: true, force: true });
+        } catch {
+          // ignore profile cleanup error
+        }
 
-      if (fs.existsSync(expectedOutPath)) {
-        resolve(expectedOutPath);
-      } else {
-        // Find any .xls generated in outdir
-        const files = fs.readdirSync(outputDirectory);
-        const match = files.find(f => f.startsWith(baseName) && f.endsWith('.xls'));
-        if (match) {
-          resolve(path.join(outputDirectory, match));
+        if (error) {
+          console.error(`[LibreOffice] Falhou após ${elapsedSec}s:`, error.message, stderr);
+          return reject(new Error(`Falha na conversão: ${error.message}. ${stderr || ''}`));
+        }
+
+        console.log(`[LibreOffice] Concluído em ${elapsedSec}s.`);
+
+        const baseName = path.basename(inputFilePath, path.extname(inputFilePath));
+        const expectedOutPath = path.join(outputDirectory, `${baseName}.xls`);
+
+        if (fs.existsSync(expectedOutPath)) {
+          resolve(expectedOutPath);
         } else {
-          reject(new Error('O arquivo .xls convertido não foi gerado pelo conversor.'));
+          // Find any .xls generated in outdir
+          const files = fs.readdirSync(outputDirectory);
+          const match = files.find(f => f.startsWith(baseName) && f.endsWith('.xls'));
+          if (match) {
+            resolve(path.join(outputDirectory, match));
+          } else {
+            reject(new Error('O arquivo .xls convertido não foi gerado pelo conversor.'));
+          }
+        }
+      },
+    );
+
+    // Node's execFile "timeout" sends SIGTERM, mas processos travados em I/O
+    // bloqueado (D-state) podem ignorá-lo. Se o processo ainda estiver vivo
+    // 10s depois do SIGTERM, força SIGKILL para não deixar a requisição presa
+    // para sempre.
+    const hardKillTimer = setTimeout(() => {
+      if (child.exitCode === null && child.pid) {
+        console.warn(`[LibreOffice] Não respondeu ao SIGTERM, forçando SIGKILL (pid ${child.pid}).`);
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // processo já pode ter encerrado
         }
       }
-    });
+    }, 100000);
   });
 }
 
@@ -252,11 +287,14 @@ app.post('/api/convert', upload.array('files', 10), async (req: Request, res: Re
 
     try {
       // 1. Analyze structure & photos
+      console.log(`[convert] ${originalName}: iniciando análise da estrutura...`);
       const analysis = await analyzeXlsx(file.path, originalName);
+      console.log(`[convert] ${originalName}: análise concluída, iniciando LibreOffice...`);
 
       // 2. Perform headless BIFF8 conversion
       const convertedFilePath = await convertXlsxToXls(file.path, CONVERTED_DIR);
       const convertedStats = await fs.promises.stat(convertedFilePath);
+      console.log(`[convert] ${originalName}: conversão finalizada com sucesso.`);
 
       // Store in memory
       convertedFilesStore.set(fileId, {

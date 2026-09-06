@@ -55,10 +55,26 @@ export default function App() {
         formData.append('files', file);
       });
 
-      const response = await fetch('/api/convert', {
-        method: 'POST',
-        body: formData,
-      });
+      // Timeout de segurança: se o servidor não responder em 3 minutos,
+      // aborta a requisição e mostra erro em vez de travar a barra para sempre.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+      let response: Response;
+      try {
+        response = await fetch('/api/convert', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+      } catch (fetchErr: any) {
+        if (fetchErr.name === 'AbortError') {
+          throw new Error('O servidor demorou demais para responder (mais de 3 minutos). Tente novamente ou verifique os logs do servidor.');
+        }
+        throw fetchErr;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
